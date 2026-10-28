@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#173f75">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="СметаБизнес">
+  <title>СметаБизнес</title>
+  <meta name="description" content="Счета, КП, сметы, договоры, акты, клиенты и прайс в одном приложении.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-512.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div>
+        <span class="eyebrow">ИП Липатова О. Ю.</span>
+        <h1 id="page-title">СметаБизнес</h1>
+      </div>
+      <button class="icon-button" id="quick-add" aria-label="Создать документ">＋</button>
+    </header>
+
+    <main id="main" class="main" aria-live="polite"></main>
+
+    <nav class="bottom-nav" aria-label="Основная навигация">
+      <button data-route="home" class="active"><span>⌂</span>Главная</button>
+      <button data-route="documents"><span>▤</span>Документы</button>
+      <button data-route="catalog"><span>▦</span>Прайс</button>
+      <button data-route="clients"><span>♙</span>Клиенты</button>
+      <button data-route="more"><span>•••</span>Ещё</button>
+    </nav>
+  </div>
+
+  <dialog id="modal"><div id="modal-content"></div></dialog>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
+

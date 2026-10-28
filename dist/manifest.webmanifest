@@ -1,0 +1,16 @@
+{
+  "name": "СметаБизнес",
+  "short_name": "СметаБизнес",
+  "description": "Документы, клиенты и прайс монтажных услуг",
+  "lang": "ru",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f5f8",
+  "theme_color": "#173f75",
+  "icons": [
+    {"src":"assets/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"},
+    {"src":"assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"}
+  ]
+}
+
