@@ -22,6 +22,8 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
+      - name: Check out PWA source
+        uses: actions/checkout@v4
       - name: Upload PWA site
         uses: actions/upload-pages-artifact@v3
         with:
