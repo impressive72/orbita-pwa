@@ -82,6 +82,12 @@ dialog::backdrop { background: rgba(10,18,30,.42); backdrop-filter: blur(3px); }
 .catalog-choice input { width: 20px; height: 20px; accent-color: var(--blue); }
 .install-card { background: linear-gradient(145deg,#173f75,#2f6cad); color: white; }
 .install-card .muted { color: rgba(255,255,255,.76); }
+.sync-card { margin-top: 16px; }
+.sync-card > p { margin-bottom: 0; }
+.sync-form { margin-top: 14px; }
+.sync-form .button { width: 100%; }
+.sync-user { overflow-wrap: anywhere; }
+.sync-form [type="submit"]:disabled, #sync-now:disabled { opacity: .6; }
 .toast { position: fixed; z-index: 100; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translate(-50%,20px); opacity: 0; pointer-events: none; background: #172235; color: white; padding: 11px 15px; border-radius: 12px; font-weight: 650; transition: .2s; box-shadow: var(--shadow); }
 .toast.show { opacity: 1; transform: translate(-50%,0); }
 .setting-row { display: flex; justify-content: space-between; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--line); }
@@ -102,4 +108,3 @@ dialog::backdrop { background: rgba(10,18,30,.42); backdrop-filter: blur(3px); }
   body,.main { background:#fff; padding:0; }
   .print-document { display:block!important; }
 }
-

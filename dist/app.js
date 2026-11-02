@@ -20,6 +20,8 @@ const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Mat
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
 let state = loadState();
+if (!Array.isArray(state.deletedRecords)) state.deletedRecords = [];
+if (!state.syncSections || typeof state.syncSections !== 'object') state.syncSections = {};
 let catalog = [];
 let route = 'home';
 let docFilter = 'invoice';
@@ -43,6 +45,13 @@ function toast(message) {
   clearTimeout(toast.timer); toast.timer = setTimeout(() => element.classList.remove('show'),2200);
 }
 function total(document) { return (document.lines || []).reduce((sum,line) => sum + (Number(line.quantity)||0)*(Number(line.price)||0),0); }
+function markDeleted(entity, id) {
+  if (!id) return;
+  const recordId = `${entity}:${id}`;
+  if (!state.deletedRecords.some(item => item.id === recordId)) {
+    state.deletedRecords.push({resource:'business',id:recordId});
+  }
+}
 function nextNumber(type) {
   const prefixes = {invoice:'СЧ',proposal:'КП',estimate:'СМ',contract:'Д',act:'А'};
   const count = state.documents.filter(item => item.type === type).length + 1;
@@ -73,7 +82,7 @@ function documentRow(document) {
 }
 
 function renderHome() {
-  title.textContent = 'СметаБизнес';
+  title.textContent = 'Орбита';
   const waiting = state.documents.filter(item => item.status !== 'paid').reduce((sum,item) => sum + total(item),0);
   const unpaid = state.documents.filter(item => item.type === 'invoice' && item.status !== 'paid').length;
   const recent = [...state.documents].sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0,5);
@@ -134,8 +143,8 @@ function openDocumentEditor(id, draftOverride = null) {
     form.querySelector('#editor-total').textContent = money(total(document));
     form.querySelectorAll('.line-item').forEach(row => {
       const index = Number(row.dataset.index);
-      row.querySelectorAll('input').forEach(input => input.addEventListener('input',() => {document.lines[index][input.dataset.field] = input.dataset.field==='name'?input.value:Number(input.value.replace(',','.'));form.querySelector('#editor-total').textContent=money(total(document));}));
-      row.querySelector('.remove-line').addEventListener('click',() => {document.lines.splice(index,1);renderLines();});
+      row.querySelectorAll('input').forEach(input => input.addEventListener('input',() => {document.lines[index][input.dataset.field] = input.dataset.field==='name'?input.value:Number(input.value.replace(',','.'));document.lines[index].localChanged=true;form.querySelector('#editor-total').textContent=money(total(document));}));
+      row.querySelector('.remove-line').addEventListener('click',() => {const itemEntities={invoice:'InvoiceItem',proposal:'ProposalItem',estimate:'EstimateItem',act:'ActItem'};markDeleted(itemEntities[document.type],document.lines[index].id);document.lines.splice(index,1);renderLines();});
     });
   };
   renderLines();
@@ -147,7 +156,7 @@ function openDocumentEditor(id, draftOverride = null) {
     openDocumentEditor(existing ? document.id : null, document);
   }, () => openDocumentEditor(existing ? document.id : null, document)));
   form.querySelector('#print-document')?.addEventListener('click',() => printDocument(document));
-  form.querySelector('#delete-document')?.addEventListener('click',() => {if(confirm('Удалить документ без возможности восстановления?')){state.documents=state.documents.filter(item=>item.id!==document.id);saveState('Документ удалён');closeModal();render();}});
+  form.querySelector('#delete-document')?.addEventListener('click',() => {if(confirm('Удалить документ без возможности восстановления?')){const entities={invoice:['Invoice','InvoiceItem'],proposal:['Proposal','ProposalItem'],estimate:['Estimate','EstimateItem'],contract:['Contract'],act:['Act','ActItem']}[document.type]||[];entities.slice(1).forEach(entity=>(document.lines||[]).forEach(line=>markDeleted(entity,line.id)));if(document.type==='estimate')for(const section of document.sections||[])markDeleted('EstimateSection',section.id);markDeleted(entities[0],document.id);state.documents=state.documents.filter(item=>item.id!==document.id);saveState('Документ удалён');closeModal();render();}});
   form.addEventListener('submit',event => {
     event.preventDefault(); const data = new FormData(form);
     document.type=data.get('type'); document.number=String(data.get('number')).trim(); document.date=data.get('date'); document.status=data.get('status'); document.clientId=data.get('clientId'); document.title=data.get('title')||''; document.notes=data.get('notes')||''; document.updatedAt=new Date().toISOString();
@@ -189,18 +198,20 @@ function renderClients() {
 function openClientEditor(id) {
   const existing=state.clients.find(item=>item.id===id); const client=existing?{...existing}:{id:uid(),name:'',inn:'',phone:'',email:'',address:''};
   modalContent.innerHTML=`<form id="client-form"><div class="modal-head"><button class="button small" type="button" data-close>Отмена</button><h3>${existing?'Клиент':'Новый клиент'}</h3><button class="button primary small">Сохранить</button></div><div class="modal-body"><section class="form-section"><div class="field"><label>Наименование</label><input required name="name" value="${esc(client.name)}"></div><div class="field"><label>ИНН</label><input inputmode="numeric" name="inn" value="${esc(client.inn)}"></div><div class="field"><label>Телефон</label><input inputmode="tel" name="phone" value="${esc(client.phone)}"></div><div class="field"><label>Email</label><input type="email" name="email" value="${esc(client.email)}"></div><div class="field"><label>Адрес</label><textarea name="address">${esc(client.address)}</textarea></div></section>${existing?'<button class="button danger" type="button" id="delete-client">Удалить клиента</button>':''}</div></form>`;
-  if (!modal.open) modal.showModal();const form=modalContent.querySelector('form');form.querySelector('[data-close]').addEventListener('click',closeModal);form.querySelector('#delete-client')?.addEventListener('click',()=>{if(confirm('Удалить клиента?')){state.clients=state.clients.filter(item=>item.id!==id);saveState('Клиент удалён');closeModal();renderClients();}});form.addEventListener('submit',event=>{event.preventDefault();const data=new FormData(form);['name','inn','phone','email','address'].forEach(key=>client[key]=String(data.get(key)||'').trim());const index=state.clients.findIndex(item=>item.id===client.id);if(index>=0)state.clients[index]=client;else state.clients.push(client);saveState('Клиент сохранён');closeModal();renderClients();});
+  if (!modal.open) modal.showModal();const form=modalContent.querySelector('form');form.querySelector('[data-close]').addEventListener('click',closeModal);form.querySelector('#delete-client')?.addEventListener('click',()=>{if(confirm('Удалить клиента?')){markDeleted('Counterparty',id);state.clients=state.clients.filter(item=>item.id!==id);saveState('Клиент удалён');closeModal();renderClients();}});form.addEventListener('submit',event=>{event.preventDefault();const data=new FormData(form);['name','inn','phone','email','address'].forEach(key=>client[key]=String(data.get(key)||'').trim());const index=state.clients.findIndex(item=>item.id===client.id);if(index>=0)state.clients[index]=client;else{client.createdAt=new Date().toISOString();state.clients.push(client);}client.updatedAt=new Date().toISOString();const deletedId=`Counterparty:${client.id}`;state.deletedRecords=state.deletedRecords.filter(item=>item.id!==deletedId);saveState('Клиент сохранён');closeModal();renderClients();});
 }
 
 function renderMore() {
   title.textContent='Ещё';
   const standalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
-  main.innerHTML=`<section class="card install-card"><h2>${standalone?'Приложение установлено':'Установить на iPhone'}</h2><p class="muted">${standalone?'СметаБизнес работает в полноэкранном режиме и доступен офлайн.':'Откройте меню «Поделиться» в Safari и выберите «На экран Домой».'}</p>${installPrompt?'<button class="button" id="install-app">Установить</button>':''}</section>
+  main.innerHTML=`<section class="card install-card"><h2>${standalone?'Приложение установлено':'Установить на iPhone'}</h2><p class="muted">${standalone?'Орбита работает в полноэкранном режиме и доступна офлайн.':'Откройте меню «Поделиться» в Safari и выберите «На экран Домой».'}</p>${installPrompt?'<button class="button" id="install-app">Установить</button>':''}</section>
   <div class="section-head"><h2>Моя компания</h2></div><section class="card"><div class="setting-row"><b>Организация</b><span>${esc(COMPANY.name)}</span></div><div class="setting-row"><b>ИНН</b><span>${COMPANY.inn}</span></div><div class="setting-row"><b>Расчётный счёт</b><span>${COMPANY.account}</span></div><div class="setting-row"><b>Банк</b><span>${esc(COMPANY.bank)}<br>БИК ${COMPANY.bik}</span></div></section>
   <div class="section-head"><h2>Данные</h2></div><section class="card"><div class="setting-row"><b>Документы</b><span>${state.documents.length}</span></div><div class="setting-row"><b>Клиенты</b><span>${state.clients.length}</span></div><div class="setting-row"><b>Позиции прайса</b><span>${catalog.length}</span></div><div class="actions"><button class="button" id="export-data">Сохранить копию</button><label class="button" for="import-data">Восстановить<input hidden type="file" id="import-data" accept="application/json"></label></div></section>
-  <p class="muted">Данные хранятся только в этом браузере. Не очищайте данные Safari без сохранённой копии.</p>`;
+  <section class="card sync-card"><h2>Синхронизация</h2><p class="muted">Войдите под администратором, чтобы синхронизировать клиентов и документы с Орбитой.</p><div id="sync-panel"></div></section>
+  <p class="muted">Без входа данные хранятся только в этом браузере. Не очищайте данные Safari без сохранённой копии.</p>`;
   main.querySelector('#install-app')?.addEventListener('click',async()=>{installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;renderMore();});
   main.querySelector('#export-data').addEventListener('click',exportData);main.querySelector('#import-data').addEventListener('change',importData);
+  window.orbitaSync?.mount(main.querySelector('#sync-panel'));
 }
 function exportData(){const blob=new Blob([JSON.stringify({...state,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`smeta-business-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Копия подготовлена');}
 function importData(event){const file=event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{try{const data=JSON.parse(reader.result);if(!Array.isArray(data.documents)||!Array.isArray(data.clients))throw new Error();if(confirm('Заменить текущие документы и клиентов данными из файла?')){state={...state,...data};saveState('Данные восстановлены');renderMore();}}catch{toast('Файл не подходит');}};reader.readAsText(file);}
@@ -219,5 +230,10 @@ async function boot(){
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
   render();
 }
+window.orbitaPWA = {
+  getState: () => state,
+  setState: next => { state = next; saveState(); render(); },
+  saveState,
+  markDeleted
+};
 boot();
-

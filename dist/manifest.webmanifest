@@ -1,6 +1,6 @@
 {
-  "name": "СметаБизнес",
-  "short_name": "СметаБизнес",
+  "name": "Орбита",
+  "short_name": "Орбита",
   "description": "Документы, клиенты и прайс монтажных услуг",
   "lang": "ru",
   "start_url": "./?source=pwa",
@@ -13,4 +13,3 @@
     {"src":"assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"}
   ]
 }
-
