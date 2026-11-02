@@ -5,6 +5,7 @@
   const REFRESH_KEY = 'orbita-field-refresh-v1';
   const USER_KEY = 'orbita-field-user-v1';
   const CACHE_PREFIX = 'orbita-field-cache-v1:';
+  const USERNAME_DOMAIN = 'users.orbita.invalid';
   const PHOTO_DB = 'orbita-field-photos-v1';
   const PHOTO_STORE = 'pending';
   const RESOURCES = ['projects', 'employees', 'tasks', 'assets', 'timeEntries', 'reports'];
@@ -50,6 +51,24 @@
 
   function token() {
     return sessionStorage.getItem(TOKEN_KEY);
+  }
+
+  function authEmail(identifier) {
+    const value = String(identifier || '').trim();
+    if (value.includes('@')) return value.toLowerCase();
+    const login = value.toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._-]{1,47}$/.test(login)) {
+      throw new Error('Логин: от 2 до 48 символов латиницей, цифры, точка, дефис или подчёркивание.');
+    }
+    return `${login}@${USERNAME_DOMAIN}`;
+  }
+
+  function displayIdentifier(email) {
+    const suffix = `@${USERNAME_DOMAIN}`;
+    const value = String(email || '');
+    if (!value.toLowerCase().endsWith(suffix)) return value;
+    const login = value.slice(0, -suffix.length);
+    return /^[a-z0-9][a-z0-9._-]{1,47}$/i.test(login) ? login : value;
   }
 
   function readUser() {
@@ -265,7 +284,7 @@
   }
 
   function employeeName() {
-    return employeeForUser()?.name || state.user?.email || 'Монтажник';
+    return employeeForUser()?.name || displayIdentifier(state.user?.email) || 'Монтажник';
   }
 
   function addOrReplace(list, value) {
@@ -446,12 +465,12 @@
       <h2>Вход в Орбиту</h2>
       <p class="muted">Объекты, этапы работ, учёт времени и фотоотчёты.</p>
       <form id="login-form" class="login-form">
-        <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" required></label>
+        <label class="field"><span>Логин</span><input name="login" type="text" autocomplete="username" autocapitalize="none" required></label>
         <label class="field"><span>Пароль</span><input name="password" type="password" autocomplete="current-password" required></label>
         <p id="login-error" class="form-error" aria-live="polite"></p>
         <button class="button primary wide-button" type="submit">Войти</button>
       </form>
-      <p class="login-foot">Нет связи? Сохранённые данные доступны после входа и синхронизируются при подключении к интернету.</p>
+      <p class="login-foot">Введите выданный логин и пароль. Для входа администратора укажите его email. Сохранённые данные синхронизируются при подключении к интернету.</p>
     </section>`;
   }
 
@@ -561,7 +580,7 @@
     const pending = Object.keys(state.pending).length + Object.keys(state.pendingPhotos).length;
     return `${connectionStrip()}<div class="section-head"><div><p class="eyebrow">Учётная запись</p><h2>Профиль</h2></div></div>
       <section class="settings-card">
-        <div class="profile-row"><span class="avatar">${html(employeeName().trim().slice(0, 1).toUpperCase())}</span><div><b>${html(employeeName())}</b><small>${html(state.user.email)}</small></div></div>
+        <div class="profile-row"><span class="avatar">${html(employeeName().trim().slice(0, 1).toUpperCase())}</span><div><b>${html(employeeName())}</b><small>${html(displayIdentifier(state.user.email))}</small></div></div>
         <div class="setting-row"><span>Роль</span><span>${state.user.role === 'admin' ? 'Администратор' : 'Монтажник'}</span></div>
         <div class="setting-row"><span>Подключение</span><span>${navigator.onLine ? 'Интернет доступен' : 'Офлайн'}</span></div>
         <div class="setting-row"><span>Последняя синхронизация</span><span>${html(state.lastSync ? fmtDate(state.lastSync, true) : 'Ещё не выполнялась')}</span></div>
@@ -621,7 +640,7 @@
         const session = await request('auth/v1/token?grant_type=password', {
           method: 'POST',
           body: {
-            email: String(values.get('email') || '').trim(),
+            email: authEmail(values.get('login')),
             password: values.get('password')
           }
         }, false);
