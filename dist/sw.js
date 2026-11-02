@@ -1,5 +1,5 @@
-const CACHE = 'smeta-business-v2';
-const ASSETS = ['./','index.html','styles.css','app.js','sync.js','catalog.json','manifest.webmanifest','assets/icon.svg','assets/icon-512.png'];
+const CACHE = 'orbita-field-v1';
+const ASSETS = ['./','index.html','styles.css','app.js','manifest.webmanifest','assets/icon.svg','assets/icon-512.png'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', event => {

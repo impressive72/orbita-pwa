@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#173f75">
+  <meta name="theme-color" content="#142d4b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Орбита">
   <title>Орбита</title>
-  <meta name="description" content="Счета, КП, сметы, договоры, акты, клиенты и прайс в одном приложении.">
+  <meta name="description" content="Рабочее место монтажника: объекты, этапы, учёт времени и фотоотчёты.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-512.png">
@@ -18,26 +18,24 @@
   <div id="app">
     <header class="topbar">
       <div>
-        <span class="eyebrow">ИП Липатова О. Ю.</span>
+        <span class="eyebrow" id="top-eyebrow">Монтажная бригада</span>
         <h1 id="page-title">Орбита</h1>
       </div>
-      <button class="icon-button" id="quick-add" aria-label="Создать документ">＋</button>
+      <button class="icon-button" id="topbar-action" aria-label="Обновить данные">↻</button>
     </header>
 
     <main id="main" class="main" aria-live="polite"></main>
 
     <nav class="bottom-nav" aria-label="Основная навигация">
-      <button data-route="home" class="active"><span>⌂</span>Главная</button>
-      <button data-route="documents"><span>▤</span>Документы</button>
-      <button data-route="catalog"><span>▦</span>Прайс</button>
-      <button data-route="clients"><span>♙</span>Клиенты</button>
-      <button data-route="more"><span>•••</span>Ещё</button>
+      <button data-route="projects" class="active"><span>⌂</span>Объекты</button>
+      <button data-route="tasks"><span>☷</span>Этапы</button>
+      <button data-route="reports"><span>▧</span>Фотоотчёты</button>
+      <button data-route="settings"><span>♙</span>Профиль</button>
     </nav>
   </div>
 
   <dialog id="modal"><div id="modal-content"></div></dialog>
   <div id="toast" class="toast" role="status"></div>
   <script src="app.js" defer></script>
-  <script src="sync.js" defer></script>
 </body>
 </html>
