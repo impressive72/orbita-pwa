@@ -8,11 +8,13 @@
   const USERNAME_DOMAIN = 'users.orbita.invalid';
   const PHOTO_DB = 'orbita-field-photos-v1';
   const PHOTO_STORE = 'pending';
-  const RESOURCES = ['projects', 'employees', 'tasks', 'assets', 'timeEntries', 'reports'];
+  const RESOURCES = ['projects', 'employees', 'tasks', 'assets', 'timeEntries', 'reports', 'serviceRequests', 'competitors'];
   const labels = {
     projects: 'Объекты',
     tasks: 'Этапы',
     reports: 'Фотоотчёты',
+    service: 'Сервис',
+    market: 'Рынок',
     settings: 'Профиль'
   };
   const state = {
@@ -24,12 +26,15 @@
     tasks: [],
     timeEntries: [],
     reports: [],
+    serviceRequests: [],
+    competitors: [],
     assets: [],
     pending: {},
     pendingPhotos: {},
     photoURLs: new Map(),
     filter: 'active',
     search: '',
+    region: 'Челябинск',
     syncState: 'idle',
     syncMessage: '',
     lastSync: null,
@@ -47,6 +52,16 @@
     return String(value ?? '').replace(/[&<>"']/g, char => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     })[char]);
+  }
+
+  function projectMaterialPlan(project) {
+    try {
+      const items = JSON.parse(project.materialPlanJSON || '[]');
+      return Array.isArray(items) ? items.filter(item => item && typeof item.name === 'string') : [];
+    } catch (error) {
+      console.error('Не удалось прочитать план материалов объекта:', error);
+      return [];
+    }
   }
 
   function token() {
@@ -152,6 +167,8 @@
         tasks: state.tasks,
         timeEntries: state.timeEntries,
         reports: state.reports,
+        serviceRequests: state.serviceRequests,
+        competitors: state.competitors,
         assets: state.assets,
         pending: state.pending,
         lastSync: state.lastSync
@@ -166,7 +183,7 @@
   function restoreCache() {
     try {
       const cached = JSON.parse(localStorage.getItem(cacheKey()) || '{}');
-      for (const key of ['projects', 'employees', 'tasks', 'timeEntries', 'reports', 'assets']) {
+      for (const key of ['projects', 'employees', 'tasks', 'timeEntries', 'reports', 'assets', 'serviceRequests', 'competitors']) {
         state[key] = Array.isArray(cached[key]) ? cached[key] : [];
       }
       state.pending = cached.pending && typeof cached.pending === 'object' ? cached.pending : {};
@@ -266,6 +283,16 @@
     return task.status === 'done' || task.status === 'completed';
   }
 
+  function taskChecklist(task) {
+    try {
+      const items = JSON.parse(task.checklistJSON || '[]');
+      return Array.isArray(items) ? items.filter(item => item && typeof item.title === 'string') : [];
+    } catch (error) {
+      console.error('Не удалось прочитать чек-лист этапа:', error);
+      return [];
+    }
+  }
+
   function activeTimer() {
     const email = String(state.user?.email || '').toLowerCase();
     return state.timeEntries.find(entry =>
@@ -302,6 +329,8 @@
       tasks: state.tasks,
       timeEntries: state.timeEntries,
       reports: state.reports,
+      serviceRequests: state.serviceRequests,
+      competitors: state.competitors,
       assets: state.assets
     }[resource];
     if (collection) addOrReplace(collection, record);
@@ -337,6 +366,8 @@
       tasks: state.tasks,
       timeEntries: state.timeEntries,
       reports: state.reports,
+      serviceRequests: state.serviceRequests,
+      competitors: state.competitors,
       assets: state.assets
     };
     for (const row of rows) {
@@ -509,9 +540,10 @@
   }
 
   function taskRow(task) {
+    const checklist = taskChecklist(task);
     return `<article class="task-row ${doneTask(task) ? 'task-done' : ''}">
       <button class="task-check ${doneTask(task) ? 'checked' : ''}" data-action="toggle-task" data-id="${html(task.id)}" aria-label="Изменить статус">${doneTask(task) ? '✓' : ''}</button>
-      <div class="task-info"><b>${html(task.name || 'Этап без названия')}</b><div class="task-meta">${statusBadge(task)}${task.dueDate ? `<span>Срок: ${html(fmtDate(task.dueDate))}</span>` : ''}</div>${task.notes ? `<p>${html(task.notes)}</p>` : ''}</div>
+      <div class="task-info"><b>${html(task.name || 'Этап без названия')}</b><div class="task-meta">${statusBadge(task)}${task.dueDate ? `<span>Срок: ${html(fmtDate(task.dueDate))}</span>` : ''}${checklist.length ? `<span>Чек-лист: ${checklist.filter(item => item.isDone).length}/${checklist.length}</span>` : ''}</div>${task.notes ? `<p>${html(task.notes)}</p>` : ''}${checklist.length ? `<details class="task-checklist"><summary>Чек-лист монтажа</summary>${checklist.map((item, index) => `<label class="checklist-item"><input type="checkbox" data-action="toggle-checklist" data-id="${html(task.id)}" data-index="${index}" ${item.isDone ? 'checked' : ''}><span>${html(item.title)}</span></label>`).join('')}</details>` : ''}</div>
     </article>`;
   }
 
@@ -524,6 +556,9 @@
     const tasks = allTasks(project.id).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
     const reports = state.reports.filter(report => report.projectID === project.id)
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    const serviceRequests = state.serviceRequests.filter(request => request.projectID === project.id)
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    const materialPlan = projectMaterialPlan(project);
     const timer = activeTimer();
     const projectTimer = activeTimerForProject(project.id);
     const otherTimer = timer && timer.projectID !== project.id;
@@ -544,6 +579,9 @@
       </section>
       <div class="section-head"><h2>Этапы работ</h2><span class="count-pill">${tasks.filter(doneTask).length}/${tasks.length}</span></div>
       <div class="task-list">${tasks.length ? tasks.map(taskRow).join('') : '<div class="empty"><b>Этапы не добавлены</b><span>Добавьте этапы в карточке объекта в основной системе.</span></div>'}</div>
+      ${materialPlan.length ? `<div class="section-head report-head"><h2>Материалы по смете</h2><span class="count-pill">${materialPlan.length}</span></div><div class="material-plan">${materialPlan.map(item => `<div><span>${html(item.name)}</span><b>${html(item.quantity)} ${html(item.unit || 'шт.')}</b></div>`).join('')}</div>` : ''}
+      <div class="section-head report-head"><h2>Сервис</h2><button class="button small" data-action="new-service-request">＋ Заявка</button></div>
+      <div class="service-list">${serviceRequests.length ? serviceRequests.slice(0, 5).map(serviceRequestCard).join('') : '<div class="muted report-empty">Заявок на обслуживание пока нет.</div>'}</div>
       <div class="section-head report-head"><h2>Фотоотчёты</h2><button class="button small primary" data-action="new-report">＋ Добавить</button></div>
       ${reports.length ? `<div class="report-list">${reports.slice(0, 10).map(reportCard).join('')}</div>` : '<div class="muted report-empty">Фотоотчётов пока нет.</div>'}`;
   }
@@ -554,6 +592,53 @@
       : '<div class="report-photo-placeholder">▧</div>';
     const task = state.tasks.find(item => item.id === report.taskID);
     return `<article class="report-card">${photo}<div class="report-copy"><b>${html(report.title || 'Фотоотчёт')}</b><p>${html(report.notes || 'Без комментария')}</p><small>${html(fmtDate(report.createdAt, true))}${task ? ` · ${html(task.name)}` : ''}</small></div></article>`;
+  }
+
+  function serviceStatusTitle(status) {
+    return ({ new: 'Новая', scheduled: 'Запланирована', inProgress: 'В работе', resolved: 'Решена' })[status] || 'Новая';
+  }
+
+  function serviceRequestCard(request) {
+    const contact = [request.contactName, request.contactPhone].filter(Boolean).join(' · ');
+    return `<article class="service-card">
+      <div class="service-card-head"><b>${html(request.title || 'Заявка на обслуживание')}</b><span class="status ${request.status === 'resolved' ? 'done' : 'progress'}">${html(serviceStatusTitle(request.status))}</span></div>
+      <p>${html(request.details || 'Описание не указано')}</p>
+      <small>${html(projectName(request.projectID))} · ${html(fmtDate(request.createdAt, true))}${request.priority === 'urgent' ? ' · Срочно' : ''}</small>
+      ${contact ? `<small>Контакт: ${html(contact)}</small>` : ''}
+    </article>`;
+  }
+
+  function serviceRequestsView() {
+    const requests = [...state.serviceRequests].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return `${connectionStrip()}<div class="section-head"><div><p class="eyebrow">Гарантийное обслуживание</p><h2>Сервисные заявки</h2></div><button class="button small primary" data-action="new-service-request">＋ Создать</button></div>
+      <div class="service-list">${requests.length ? requests.map(serviceRequestCard).join('') : '<div class="empty"><b>Сервисных заявок пока нет</b><span>Создайте заявку, чтобы зафиксировать обслуживание оборудования.</span></div>'}</div>`;
+  }
+
+  function competitorCard(item) {
+    const price = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(Number(item.price) || 0);
+    const source = String(item.sourceURL || '');
+    const safeSource = /^https:\/\//i.test(source) ? `<a href="${html(source)}" target="_blank" rel="noopener noreferrer">Источник ↗</a>` : '';
+    return `<article class="service-card">
+      <div class="service-card-head"><b>${html(item.name || 'Предложение')}</b><strong>${html(price)}</strong></div>
+      <p>${html([item.competitorName, item.category, item.region].filter(Boolean).join(' · '))}</p>
+      ${item.notes ? `<p>${html(item.notes)}</p>` : ''}
+      <small>${html(fmtDate(item.observedAt, true))} ${safeSource}</small>
+    </article>`;
+  }
+
+  function marketView() {
+    if (state.user?.role !== 'admin') return projectsView();
+    const items = [...state.competitors].sort((a, b) => new Date(b.observedAt || 0) - new Date(a.observedAt || 0));
+    const query = state.search.trim();
+    return `${connectionStrip()}<div class="section-head"><div><p class="eyebrow">Публичные предложения</p><h2>Конкуренты</h2></div><button class="button small primary" data-action="new-market-entry">＋ Записать цену</button></div>
+      <section class="settings-card market-search">
+        <label class="field"><span>Что ищем</span><input id="market-search" type="search" placeholder="Монтаж камер, домофона..." value="${html(query)}"></label>
+        <label class="field"><span>Регион</span><input id="market-region" value="${html(state.region || 'Челябинск')}"></label>
+        <div class="market-links"><a class="button small" data-market-host="avito.ru" href="#" target="_blank" rel="noopener noreferrer">Найти на Avito ↗</a><a class="button small" data-market-host="yandex.ru" href="#" target="_blank" rel="noopener noreferrer">Найти в Яндексе ↗</a></div>
+        <p class="settings-note">Открываем обычную публичную выдачу. Объявления не загружаются автоматически; сохраняйте вручную только проверенные данные и ссылки.</p>
+      </section>
+      <div class="section-head"><h2>Мои наблюдения</h2><span class="count-pill">${items.length}</span></div>
+      <div class="service-list">${items.length ? items.map(competitorCard).join('') : '<div class="empty"><b>Наблюдений пока нет</b><span>Добавьте цену и ссылку на найденное предложение.</span></div>'}</div>`;
   }
 
   function tasksView() {
@@ -601,6 +686,11 @@
       button.classList.toggle('active', button.dataset.route ===
         (state.route === 'project' ? 'projects' : state.route));
     });
+    const canOpenMarket = state.user?.role === 'admin';
+    const marketButton = document.querySelector('.bottom-nav [data-route="market"]');
+    if (marketButton) marketButton.hidden = !canOpenMarket;
+    document.querySelector('.bottom-nav').classList.toggle('market-enabled', canOpenMarket);
+    if (state.route === 'market' && !canOpenMarket) state.route = 'projects';
     if (!state.user) {
       document.querySelector('.bottom-nav').hidden = true;
       document.querySelector('#topbar-action').hidden = true;
@@ -621,8 +711,11 @@
       main.innerHTML = projectView(project);
     } else if (state.route === 'tasks') main.innerHTML = tasksView();
     else if (state.route === 'reports') main.innerHTML = reportsView();
+    else if (state.route === 'service') main.innerHTML = serviceRequestsView();
+    else if (state.route === 'market') main.innerHTML = marketView();
     else if (state.route === 'settings') main.innerHTML = settingsView();
     else main.innerHTML = projectsView();
+    if (state.route === 'market') updateMarketLinks();
     hydratePhotos();
   }
 
@@ -725,6 +818,15 @@
     });
   }
 
+  function toggleChecklistItem(taskID, index) {
+    const task = findTask(taskID);
+    if (!task) return;
+    const checklist = taskChecklist(task);
+    if (!Number.isInteger(index) || index < 0 || index >= checklist.length) return;
+    checklist[index].isDone = !checklist[index].isDone;
+    queueRecord('tasks', { ...task, checklistJSON: JSON.stringify(checklist) });
+  }
+
   function startTimer() {
     const projectID = state.selectedProject;
     if (!projectID || activeTimer()) {
@@ -769,6 +871,132 @@
       status: 'submitted'
     });
     showToast(`Время сохранено: ${minutes} мин.`);
+  }
+
+  function openServiceRequestForm() {
+    const projects = state.projects.filter(project => project.status !== 'completed');
+    if (!projects.length) {
+      showToast('Нет доступных объектов для сервисной заявки.');
+      return;
+    }
+    const selectedProjectID = state.selectedProject || projects[0].id;
+    modalContent.innerHTML = `<div class="modal-head"><h2>Заявка на обслуживание</h2><button class="close-button" data-close aria-label="Закрыть">×</button></div>
+      <form id="service-form" class="modal-body">
+        <label class="field"><span>Объект</span><select name="projectID" required>${projects.map(project => `<option value="${html(project.id)}" ${project.id === selectedProjectID ? 'selected' : ''}>${html(project.name || 'Объект')}</option>`).join('')}</select></label>
+        <label class="field"><span>Что нужно проверить</span><input name="title" maxlength="120" required placeholder="Например, не работает камера на входе"></label>
+        <label class="field"><span>Описание неисправности</span><textarea name="details" maxlength="2000" required placeholder="Укажите симптомы, время и контакт на объекте"></textarea></label>
+        <label class="field"><span>Приоритет</span><select name="priority"><option value="normal">Обычный</option><option value="urgent">Срочный</option></select></label>
+        <label class="field"><span>Контактное лицо</span><input name="contactName" maxlength="120"></label>
+        <label class="field"><span>Телефон</span><input name="contactPhone" maxlength="40" type="tel"></label>
+        <p id="service-error" class="form-error" aria-live="polite"></p>
+        <button class="button primary wide-button" type="submit">Сохранить заявку</button>
+      </form>`;
+    modal.showModal();
+    modal.querySelector('#service-form').addEventListener('submit', saveServiceRequest);
+  }
+
+  function saveServiceRequest(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector('[type="submit"]');
+    const error = modal.querySelector('#service-error');
+    const values = new FormData(form);
+    const projectID = String(values.get('projectID') || '');
+    const title = String(values.get('title') || '').trim();
+    const details = String(values.get('details') || '').trim();
+    const project = state.projects.find(item => item.id === projectID);
+    if (!project || !title || !details) {
+      error.textContent = 'Выберите объект и заполните тему и описание.';
+      return;
+    }
+    button.disabled = true;
+    const employee = employeeForUser();
+    const now = new Date().toISOString();
+    const request = {
+      id: crypto.randomUUID().toLowerCase(),
+      title,
+      details,
+      status: 'new',
+      priority: String(values.get('priority') || 'normal'),
+      contactName: String(values.get('contactName') || '').trim(),
+      contactPhone: String(values.get('contactPhone') || '').trim(),
+      employeeID: employee?.id || null,
+      employeeEmail: state.user.email,
+      employeeName: employeeName(),
+      projectID,
+      dueDate: null,
+      resolvedAt: null,
+      createdAt: now,
+      updatedAt: now
+    };
+    try {
+      queueRecord('serviceRequests', request);
+      modal.close();
+      showToast('Сервисная заявка сохранена и поставлена в очередь синхронизации.');
+    } catch (saveError) {
+      error.textContent = saveError.message || 'Не удалось сохранить заявку.';
+      button.disabled = false;
+    }
+  }
+
+  function openMarketEntryForm() {
+    modalContent.innerHTML = `<div class="modal-head"><h2>Записать предложение</h2><button class="close-button" data-close aria-label="Закрыть">×</button></div>
+      <form id="market-form" class="modal-body">
+        <label class="field"><span>Услуга</span><input name="name" maxlength="120" required></label>
+        <label class="field"><span>Конкурент</span><input name="competitorName" maxlength="120"></label>
+        <label class="field"><span>Направление</span><select name="category"><option>Видеонаблюдение</option><option>СКУД</option><option>Домофония</option><option>СКС</option><option>ВОЛС</option><option>Обслуживание</option></select></label>
+        <label class="field"><span>Регион</span><input name="region" maxlength="120" value="${html(state.region || 'Челябинск')}"></label>
+        <label class="field"><span>Цена, ₽</span><input name="price" type="number" min="0.01" step="0.01" required></label>
+        <label class="field"><span>Ссылка на объявление / сайт (HTTPS)</span><input name="sourceURL" type="url" maxlength="1000" placeholder="https://..."></label>
+        <label class="field"><span>Условия и примечание</span><textarea name="notes" maxlength="1000"></textarea></label>
+        <p id="market-error" class="form-error" aria-live="polite"></p>
+        <button class="button primary wide-button" type="submit">Сохранить</button>
+      </form>`;
+    modal.showModal();
+    modal.querySelector('#market-form').addEventListener('submit', saveMarketEntry);
+  }
+
+  function saveMarketEntry(event) {
+    event.preventDefault();
+    if (state.user?.role !== 'admin') {
+      showToast('Сохранять анализ рынка может только администратор.');
+      return;
+    }
+    const form = event.currentTarget;
+    const button = form.querySelector('[type="submit"]');
+    const error = modal.querySelector('#market-error');
+    const values = new FormData(form);
+    const name = String(values.get('name') || '').trim();
+    const price = Number(values.get('price'));
+    const sourceURL = String(values.get('sourceURL') || '').trim();
+    if (!name || !Number.isFinite(price) || price <= 0 ||
+        (sourceURL && !/^https:\/\//i.test(sourceURL))) {
+      error.textContent = 'Укажите услугу, цену больше нуля и безопасную HTTPS-ссылку.';
+      return;
+    }
+    button.disabled = true;
+    const now = new Date().toISOString();
+    const record = {
+      id: crypto.randomUUID().toLowerCase(),
+      name,
+      competitorName: String(values.get('competitorName') || '').trim(),
+      category: String(values.get('category') || ''),
+      region: String(values.get('region') || '').trim(),
+      sourceURL,
+      notes: String(values.get('notes') || '').trim(),
+      price,
+      observedAt: now,
+      createdAt: now,
+      updatedAt: now
+    };
+    try {
+      queueRecord('competitors', record);
+      modal.close();
+      showToast('Предложение сохранено в общей базе.');
+    } catch (saveError) {
+      error.textContent = saveError.message || 'Не удалось сохранить предложение.';
+      button.disabled = false;
+    }
   }
 
   function openReportForm() {
@@ -871,6 +1099,12 @@
   }
 
   main.addEventListener('input', event => {
+    if (event.target.id === 'market-search' || event.target.id === 'market-region') {
+      if (event.target.id === 'market-search') state.search = event.target.value;
+      else state.region = event.target.value;
+      updateMarketLinks();
+      return;
+    }
     if (event.target.id === 'project-search' || event.target.id === 'task-search') {
       state.search = event.target.value;
       const selection = event.target.selectionStart;
@@ -880,6 +1114,18 @@
       replacement?.setSelectionRange(selection, selection);
     }
   });
+
+  function updateMarketLinks() {
+    const query = [state.search, state.region].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+    for (const link of main.querySelectorAll('[data-market-host]')) {
+      const host = link.dataset.marketHost;
+      const url = host === 'avito.ru'
+        ? `https://www.avito.ru/chelyabinsk/uslugi?q=${encodeURIComponent(query)}`
+        : `https://${host}/search/?text=${encodeURIComponent(query)}`;
+      link.href = query ? url : '#';
+      link.setAttribute('aria-disabled', query ? 'false' : 'true');
+    }
+  }
 
   main.addEventListener('click', event => {
     const open = event.target.closest('[data-open-project]');
@@ -901,9 +1147,12 @@
       state.selectedProject = null;
       render();
     } else if (action.dataset.action === 'toggle-task') toggleTask(action.dataset.id);
+    else if (action.dataset.action === 'toggle-checklist') toggleChecklistItem(action.dataset.id, Number(action.dataset.index));
     else if (action.dataset.action === 'start-timer') startTimer();
     else if (action.dataset.action === 'stop-timer') stopTimer();
     else if (action.dataset.action === 'new-report') openReportForm();
+    else if (action.dataset.action === 'new-service-request') openServiceRequestForm();
+    else if (action.dataset.action === 'new-market-entry') openMarketEntryForm();
     else if (action.dataset.action === 'logout') {
       clearSession();
       state.route = 'projects';
